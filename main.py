@@ -1,17 +1,15 @@
 # A library for text to speechh conversion
 import time
+import requests
 import win32com.client
 import datetime
 import wikipedia
 import speech_recognition as sr
 import webbrowser
 import os
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
-
-SPOTIFY_CLIENT_ID = 'e8962aec09aa4d24aace46f0bf3a0f0a'
-SPOTIFY_CLIENT_SECRET = 'd710ee25cb3947f0a85708170b3496ff'
-SPOTIFY_REDIRECT_URL = 'http://127.0.0.1:8888/callback'
+import pywhatkit
+from bs4 import BeautifulSoup
+from googlesearch import search as google_search
 # Function to speak
 def speak(audio):
     speaker = win32com.client.Dispatch("SAPI.SpVoice")  # "SAPI.SpVoice" is the official name of the Microsoft Speech API voice feature.
@@ -44,8 +42,7 @@ def listen():
     return query
 
 # main function
-if __name__ == "__main__":
-    
+if __name__ == "__main__": 
     wish()
     while True:
         query = listen().lower()
@@ -74,25 +71,44 @@ if __name__ == "__main__":
             codePath = r"C:\Users\USER\AppData\Local\Programs\Microsoft VS Code\Code.exe"
             os.startfile(codePath)
         
-        elif 'on spotify' in query:
-            song = query.replace('on spotify','').replace('play','').strip()
+        elif 'play' in query:
+            song = query.replace('play','').strip()
             if song:
-                try:
-                    scope = "user-modify-playback-state user-read-playback-state"
-                    sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIFY_CLIENT_ID,client_secret=SPOTIFY_CLIENT_SECRET,redirect_uri=SPOTIFY_REDIRECT_URL,scope=scope))
-                    Music_results = sp.search(q=song,limit=1)
-                    if not Music_results['tracks']['items']:
-                        speak(f"Sorry, I could not find the song {song} on spotify.")
-                    else:
-                        track = Music_results['tracks']['items'][0]
-                        track_uri = track['uri']
-                        sp.start_playback(uris=[track_uri])
-                        speak(f"Playing {track['name']} by {track['artists'][0]['name']} on Spotify")
-                except Exception as e:
-                    speak("Could not connect to Spotify. Please make sure it is opened before this code started running")
-                    print(f"Error: {e}")
+                speak(f'Playing: {song} on youtube')
+                pywhatkit.playonyt(song)
             else:
-                speak("What song would u like to play on Spotify?")
+                speak('Couldnt found the song in Youtube')
+        elif 'search' in query:
+            search_term = query.replace('search','').strip()
+            if search_term:
+                speak(f"Searching the web for {search_term} and summarizing")
+                try:
+                    search_results = list(google_search(search_term,num_results=1))
+                    if not search_results:
+                        speak("Sorry, I couldn't find any results")
+                        continue
+                    first_url = search_results[0]
+                    headers = {
+                        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                    }
+                    response = requests.get(first_url,headers=headers)
+                    response.raise_for_status()
 
-            speak(f"Searching for {song} on Spotify")
-            webbrowser.open(f"https://open.spotify.com/search/SONG%20NAME")
+                    soup = BeautifulSoup(response.text,'html.parser')
+                    page_title = soup.find('title').get_text()
+
+                    first_paragraph = soup.find('p')
+                    summary = first_paragraph.get_text().strip() if first_paragraph else "I could not find a summary on the page."
+
+                    speak(f"The first result is titled: {page_title}")
+                    speak("Here is summary")
+                    print(summary)
+                    speak(summary)
+
+                    speak("Opening the page for u now")
+                    webbrowser.open(first_url)
+                except Exception as e:
+                    speak("I had trouble reading the page")
+                    if 'first_url' in locals() and first_url:
+                        webbrowser.open(first_url)
+                    print(f"Search error: {e}")
