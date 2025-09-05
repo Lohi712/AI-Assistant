@@ -112,3 +112,29 @@ if __name__ == "__main__":
                     if 'first_url' in locals() and first_url:
                         webbrowser.open(first_url)
                     print(f"Search error: {e}")
+
+        elif 'weather' in query:
+            api_key = '1f5fb087e340634614cedb20e0715ace'
+            base_url = "http://api.openweathermap.org/data/2.5/weather?"
+            speak("Which city's weather would u like to know? (only say the name of city)")
+            city_name = listen().lower()
+            if city_name and city_name != 'none':
+                complete_url = f"{base_url}appid={api_key}&q={city_name}&units=metric"
+                try:
+                    response = requests.get(complete_url)
+                    data = response.json()
+                    if data['cod'] != '404':
+                        main = data["main"]
+                        weather_desc = data["weather"][0]['description']
+                        temp = main['temp']
+                        print(f"temp: {temp} and {weather_desc}")
+                        speak(f"The temperature in {city_name} is {temp} degrees celcius with {weather_desc}")
+
+                    else:
+                        speak("Sorry I couldn't find the city")
+                except Exception as e:
+                    speak("Sorry, I couldn;t fetch the weather deatils")
+            else:
+                speak("I didn't catch the city name")
+
+        
