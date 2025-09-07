@@ -164,6 +164,7 @@ if __name__ == "__main__":
                     speak("That's all for the top headlines.")
 
             except Exception as e:
+                
                 speak("Sorry, I encountered an error while fetching the news.")
                 print(f"News error: {e}")
 
