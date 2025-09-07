@@ -29,6 +29,7 @@ def listen():
     r = sr.Recognizer()
     with sr.Microphone() as source:
         print("Listening...")
+        r.adjust_for_ambient_noise(source,duration=1)
         r.pause_threshold = 1
         audio = r.listen(source)
 
@@ -137,4 +138,32 @@ if __name__ == "__main__":
             else:
                 speak("I didn't catch the city name")
 
-        
+        elif 'news' in query or 'headlines' in query:
+            gnews_api_key = "e75c19434bd1fb1a928ff34b38378099" 
+            speak("Fetching the latest news headlines.")
+
+            try:
+                news_url = f"https://gnews.io/api/v4/top-headlines?lang=en&country=in&token={gnews_api_key}"
+                
+                response = requests.get(news_url)
+                response.raise_for_status()
+                
+                news_data = response.json()
+                articles = news_data.get("articles", [])
+                
+                if not articles:
+                    speak("Sorry, I couldn't find any news headlines at the moment.")
+                else:
+                    speak("Here are the top headlines:")
+                    for i,article in enumerate(articles[:3],start=1):
+                        print(f"Headlines {i}: {article['title']}")
+                        print(f"Description: {article['description']}")
+                        print(f"Source: {article['source']['name']}")
+                        speak(article['title'])
+                    
+                    speak("That's all for the top headlines.")
+
+            except Exception as e:
+                speak("Sorry, I encountered an error while fetching the news.")
+                print(f"News error: {e}")
+
