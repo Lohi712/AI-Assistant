@@ -9,6 +9,7 @@ import webbrowser
 import os
 import pywhatkit
 from bs4 import BeautifulSoup
+import pyautogui
 from googlesearch import search as google_search
 # Function to speak
 def speak(audio):
@@ -31,7 +32,11 @@ def listen():
         print("Listening...")
         r.adjust_for_ambient_noise(source,duration=1)
         r.pause_threshold = 1
-        audio = r.listen(source)
+        try:
+            audio = r.listen(source,timeout=5,phrase_time_limit=15)
+        except sr.WaitTimeoutError:
+            speak("I didn't hear anything please try again")
+            return "None"   
 
     try:
         print("Recognizing...")
@@ -164,7 +169,57 @@ if __name__ == "__main__":
                     speak("That's all for the top headlines.")
 
             except Exception as e:
-                
+
                 speak("Sorry, I encountered an error while fetching the news.")
                 print(f"News error: {e}")
 
+        elif 'whatsapp' in query:
+            speak("Who should i send the message to?")
+            reciptent_name = input("Enter the reciptent name: ")
+            if reciptent_name == 'None':
+                speak("Sorry i didn't catch the name")
+                continue
+            speak(f"Got it. What message do  wanna send to {reciptent_name}")
+            print(f"Listening the message for {reciptent_name}")
+            message = listen()
+
+            if message == "None":
+                speak("Sorry, I didn't catch the message. Cancelling the operation")
+                continue
+            speak(f"Preparing to send the message to {reciptent_name}")
+
+            try:
+                pyautogui.press('win')
+                time.sleep(1)
+                pyautogui.write('Whatsapp')
+                time.sleep(1)
+                pyautogui.press('enter')
+                time.sleep(2)
+                pyautogui.hotkey('ctrl','f')
+                time.sleep(1)
+                pyautogui.write(reciptent_name)
+                time.sleep(1)
+                pyautogui.press('enter')
+                time.sleep(1)
+                pyautogui.press('tab')
+                time.sleep(1)
+                pyautogui.press('enter')
+                time.sleep(1)
+                text_box_loc = pyautogui.locateCenterOnScreen('WhatsappTextBox.png',confidence=0.8)
+                if text_box_loc:
+                    pyautogui.click(text_box_loc)
+                    time.sleep(1)
+                else:
+                    speak("Sorry i couldn't get the textbox")
+                    continue
+                pyautogui.write(message)
+                time.sleep(1)
+                pyautogui.press('enter')
+
+                speak("The Message has been sent")
+                time.sleep(2)
+                pyautogui.hotkey('alt','f4')
+
+            except Exception as e:
+                speak("Sorry, I encountered an error while trying to control whatsapp")
+                print(f"Whatsapp error: {e}")
