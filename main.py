@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import pyautogui
 from googlesearch import search as google_search
 import smtplib
+import google.generativeai as genai
 
 # Function to speak
 def speak(audio):
@@ -27,6 +28,17 @@ def wish():
     else:
         speak("Good Evening Sir!!")
     speak("This is VEGA (your Virtual Enhanced General Assistant), How may I help you today!")
+
+def conversation(query):
+    conv_api = os.getenv("GOOGLE_AI_API_KEY")
+    try:
+        genai.configure(api_key=conv_api)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(query)
+        return response.text
+    except Exception as e:
+        print(f"AI Error: {e}")
+        return "Sorry my brain is not working"
 
 def listen():
     r = sr.Recognizer()
@@ -74,6 +86,7 @@ def mail(to,subject,body):
 # main function
 if __name__ == "__main__": 
     wish()
+    print(f"Currently using google-generativeai version: {genai.__version__}")
     while True:
         query = listen().lower()
         if 'wikipedia' in query:
@@ -200,15 +213,13 @@ if __name__ == "__main__":
         elif 'whatsapp' in query:
             speak("Who should i send the message to?")
             reciptent_name = input("Enter the reciptent name: ")
-            if reciptent_name == 'None':
-                speak("Sorry i didn't catch the name")
-                continue
             speak(f"Got it. What message do  wanna send to {reciptent_name}")
             print(f"Listening the message for {reciptent_name}")
             message = listen()
 
-            if message == "None":
-                speak("Sorry, I didn't catch the message. Cancelling the operation")
+            while message == "None":
+                speak("Sorry, I didn't catch the message. Say it again")
+                message = listen()
                 continue
             speak(f"Preparing to send the message to {reciptent_name}")
 
@@ -267,3 +278,14 @@ if __name__ == "__main__":
                 speak("email has been sent")
             else:
                 speak("Sorry email couldn't be sent")
+
+        elif 'go to sleep' in query or 'bye' in query or 'exit' in query:
+            speak("GoodBye Sir. Shutting Down")
+            break
+
+        else:
+            if query and query != "none":
+                speak("Let me think about that")
+                ai_resp = conversation(query)
+                print(f"VEGA: {ai_resp}")
+                speak(ai_resp)
