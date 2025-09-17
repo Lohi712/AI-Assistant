@@ -11,6 +11,8 @@ import pywhatkit
 from bs4 import BeautifulSoup
 import pyautogui
 from googlesearch import search as google_search
+import smtplib
+
 # Function to speak
 def speak(audio):
     speaker = win32com.client.Dispatch("SAPI.SpVoice")  # "SAPI.SpVoice" is the official name of the Microsoft Speech API voice feature.
@@ -46,6 +48,28 @@ def listen():
         print("Say that again pleasee...")
         return "None"
     return query
+
+def mail(to,subject,body):
+    gmail_user = 'quantmech19@gmail.com'
+    gmail_psw = os.getenv('GMAIL_APP_PASSWORD')
+    if not gmail_psw:
+        # This message will tell you if the variable is missing
+        print("CRITICAL ERROR: The GMAIL_APP_PASSWORD environment variable was not found.")
+        speak("I could not find the password environment variable. Please set it in the terminal before running the script.")
+        return False
+    try:
+        message = f"Subject: {subject}\n\n{body}"
+        server = smtplib.SMTP('smtp.gmail.com',587)
+        server.ehlo()
+        server.starttls()
+        server.login(gmail_user,gmail_psw)
+        server.sendmail(gmail_user,to,message)
+        server.close()
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        return False
+
 
 # main function
 if __name__ == "__main__": 
@@ -223,3 +247,23 @@ if __name__ == "__main__":
             except Exception as e:
                 speak("Sorry, I encountered an error while trying to control whatsapp")
                 print(f"Whatsapp error: {e}")
+
+        elif 'email' in query:
+            speak("Who is the receiptent? Please type their email address")
+            reciptent_email = input("Enter reciptent's email: ")
+            speak("What is the subject of the email?")
+            subject = listen()
+            while subject == "None":
+                speak("I didn't catch the subject please try again")
+                subject = listen()
+            speak("Now lets say the body of your email")
+            body = listen()
+            while body == "None":
+                speak("Sorry didn't got the body, please try again")
+                body = listen()
+
+            speak("Authenticating and sending email...")
+            if mail(reciptent_email,subject,body):
+                speak("email has been sent")
+            else:
+                speak("Sorry email couldn't be sent")
