@@ -23,10 +23,9 @@ def speak(audio):
     speaker.speak(audio)
 
 def wake_up():
-    PICOVOICE_ACCESS_KEY = 'aldXhjlyIDCQwsH/6oOiPivFC1ba96As59JPHZcryQFO0ZTYuYs4sA=='
     keyword_path = 'Hey-Vega_en_windows_v3_0_0.ppn'
     try:
-        porcupine = pvporcupine.create(access_key= PICOVOICE_ACCESS_KEY,keyword_paths=[keyword_path])
+        porcupine = pvporcupine.create(access_key= os.getenv('PICOVOICE_ACCESS_KEY'),keyword_paths=[keyword_path])
         pa = pyaudio.PyAudio()
         audio_stream = pa.open(rate= porcupine.sample_rate,channels=1,format=pyaudio.paInt16,input=True,frames_per_buffer=porcupine.frame_length)
         print("Listening for wake word ('VEGA')...")
