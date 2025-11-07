@@ -122,10 +122,21 @@ if __name__ == "__main__":
                 if 'wikipedia' in query:
                     speak("Searching Wikipedia...")
                     query = query.replace("wikipedia","")
-                    Wikiresults = wikipedia.summary(query,sentences = 2)
-                    speak("According to Wikipedia..")
-                    print(Wikiresults)
-                    speak(Wikiresults)
+                    try:
+                        Wikiresults = wikipedia.summary(query,sentences = 2)
+                        speak("According to Wikipedia..")
+                        print(Wikiresults)
+                        speak(Wikiresults)
+                    except wikipedia.exceptions.DisambiguationError as e:
+                        speak(f"Your search for {query} is ambiguous. It could refer to many things.")
+                        print(f"Disambiguation Error: {query} may refer to: ")
+                        print(e.options)
+                        speak("Please be more specific..")
+                    except wikipedia.exceptions.PageError:
+                        speak(f"Sorry couldn't find page for {query} in wikipedia")
+                    except Exception as e:
+                        speak(f"Sorry some error occurred while searching in wikipedia")
+                        print(f"Wikipiedia error: {e}")
 
                 elif 'open youtube' in query:
                     webbrowser.open("youtube.com")
