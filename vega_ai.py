@@ -16,6 +16,8 @@ import google.generativeai as genai
 import pvporcupine
 import pyaudio
 import struct
+from ddgs import DDGS
+import re
 
 # Function to speak
 def speak(audio):
@@ -46,6 +48,10 @@ def wake_up():
     except Exception as e:
         print(F"Error in wake up function: {e}")
         return False
+def cmd_format(text):
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # remove bold
+    text = re.sub(r'\* ', '- ', text)             # convert bullet
+    return text
 
 def wish():
     hour = int(datetime.datetime.now().hour)
@@ -59,11 +65,14 @@ def wish():
 
 def conversation(query):
     conv_api = os.getenv("GOOGLE_AI_API_KEY")
+    if not conv_api:
+        return "API key is missing."
     try:
         genai.configure(api_key=conv_api)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(query)
-        return response.text
+        r = cmd_format(response.text)
+        return r
     except Exception as e:
         print(f"AI Error: {e}")
         return "Sorry my brain is not working"
@@ -121,19 +130,30 @@ if __name__ == "__main__":
                 query = listen().lower()
                 if 'wikipedia' in query:
                     speak("Searching Wikipedia...")
-                    query = query.replace("wikipedia","")
+                    stop_words = ['search','for','the','country','in','item','on','wikipedia','about','tell','me','who','is','what','an']
+                    query_words = query.split()
+                    clean_words = []
+                    for word in query_words:
+                        if word not in stop_words:
+                            clean_words.append(word)
+                    clean_query = " ".join(clean_words)
+                    print(clean_query)
+                    if not clean_words:
+                        speak("I can hear you saying Wikipedia but i couldn't get the topic for which i have to search. Please try again")
+                        continue
+
                     try:
-                        Wikiresults = wikipedia.summary(query,sentences = 2)
+                        Wikiresults = wikipedia.summary(clean_query,sentences = 2, auto_suggest = True)
                         speak("According to Wikipedia..")
                         print(Wikiresults)
                         speak(Wikiresults)
                     except wikipedia.exceptions.DisambiguationError as e:
-                        speak(f"Your search for {query} is ambiguous. It could refer to many things.")
-                        print(f"Disambiguation Error: {query} may refer to: ")
+                        speak(f"Your search for {clean_query} is ambiguous. It could refer to many things.")
+                        print(f"Disambiguation Error: {clean_query} may refer to: ")
                         print(e.options)
                         speak("Please be more specific..")
                     except wikipedia.exceptions.PageError:
-                        speak(f"Sorry couldn't find page for {query} in wikipedia")
+                        speak(f"Sorry couldn't find page for {clean_query} in wikipedia")
                     except Exception as e:
                         speak(f"Sorry some error occurred while searching in wikipedia")
                         print(f"Wikipiedia error: {e}")
@@ -164,38 +184,35 @@ if __name__ == "__main__":
                         speak('Couldnt found the song in Youtube')
                 elif 'search' in query:
                     search_term = query.replace('search','').strip()
-                    if search_term:
-                        speak(f"Searching the web for {search_term} and summarizing")
-                        try:
-                            search_results = list(google_search(search_term,num_results=1))
-                            if not search_results:
-                                speak("Sorry, I couldn't find any results")
-                                continue
-                            first_url = search_results[0]
-                            headers = {
-                                'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                            }
-                            response = requests.get(first_url,headers=headers)
-                            response.raise_for_status()
+                    if not search_term:
+                        speak("What would u like to search?")
+                        continue
+                    
+                    speak(f"Searching the web for {search_term} and summarizing")
+                    try:
+                        with DDGS() as ddgs:
+                            search_results = list(ddgs.text(search_term,num_results=1))
+                        if not search_results:
+                            speak("Sorry, I couldn't find any results")
+                            continue
+                        first_result = search_results[0]
+                        page_title = first_result['title']
+                        summary = first_result['body']
+                        first_url = first_result['href']
 
-                            soup = BeautifulSoup(response.text,'html.parser')
-                            page_title = soup.find('title').get_text()
+                        speak(f"The first result is titled: {page_title}")
+                        speak("Here is summary")
+                        print(summary)
+                        speak(summary)
 
-                            first_paragraph = soup.find('p')
-                            summary = first_paragraph.get_text().strip() if first_paragraph else "I could not find a summary on the page."
+                        speak("Opening the page for u now")
+                        webbrowser.open(first_url)
 
-                            speak(f"The first result is titled: {page_title}")
-                            speak("Here is summary")
-                            print(summary)
-                            speak(summary)
-
-                            speak("Opening the page for u now")
+                    except Exception as e:
+                        speak("I had trouble reading the page")
+                        if 'first_url' in locals() and first_url:
                             webbrowser.open(first_url)
-                        except Exception as e:
-                            speak("I had trouble reading the page")
-                            if 'first_url' in locals() and first_url:
-                                webbrowser.open(first_url)
-                            print(f"Search error: {e}")
+                        print(f"Search error: {e}")
 
                 elif 'weather' in query:
                     api_key = '1f5fb087e340634614cedb20e0715ace'
@@ -256,7 +273,7 @@ if __name__ == "__main__":
                     reciptent_name = input("Enter the reciptent name: ")
                     speak(f"Got it. What message do  wanna send to {reciptent_name}")
                     print(f"Listening the message for {reciptent_name}")
-                    message = listen()
+                    message = input("Enter the message: ")
 
                     while message == "None":
                         speak("Sorry, I didn't catch the message. Say it again")
