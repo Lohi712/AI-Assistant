@@ -1,0 +1,30 @@
+# ============================================================
+# VEGA AI Assistant — Python Dependencies
+# ============================================================
+
+# --- Core AI & Speech ---
+google-generativeai
+SpeechRecognition
+pywin32
+pvporcupine
+PyAudio
+
+# --- Web & Search ---
+requests
+beautifulsoup4
+wikipedia
+duckduckgo-search
+pywhatkit
+
+# --- System Automation ---
+pyautogui
+AppOpener
+screen-brightness-control
+pycaw
+comtypes
+
+# --- Communication ---
+# smtplib is part of the Python standard library
+
+# --- Configuration ---
+python-dotenv
