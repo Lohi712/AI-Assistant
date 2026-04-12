@@ -37,34 +37,18 @@ class HardwareCommand(BaseCommand):
     # ── Volume Control ──────────────────────────────────────────
 
     def _handle_volume(self, query: str, assistant) -> None:
-        """Handle volume-related commands using pycaw."""
+        """Handle volume-related commands using pycaw (with fallback to virtual keys)."""
+        volume = self._get_volume_interface()
+
+        if volume is None:
+            # pycaw failed — fall back to virtual key simulation
+            self._handle_volume_via_keys(query, assistant)
+            return
+
         try:
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-
-            devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(
-                IAudioEndpointVolume._iid_, CLSCTX_ALL, None
-            )
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
-
-            current = volume.GetMasterVolumeLevelScalar()  # 0.0 to 1.0
+            current = volume.GetMasterVolumeLevelScalar()   # 0.0 → 1.0
             current_pct = int(current * 100)
 
-        except ImportError:
-            logger.error("pycaw or comtypes not installed.")
-            assistant.speech.speak(
-                "Volume control requires pycaw. "
-                "Please install it with: pip install pycaw comtypes"
-            )
-            return
-        except Exception as e:
-            logger.error("Volume initialization error: %s", e)
-            assistant.speech.speak("Sorry, I couldn't access volume controls.")
-            return
-
-        try:
             # ── Mute / Unmute ──
             if "unmute" in query:
                 volume.SetMute(0, None)
@@ -107,6 +91,79 @@ class HardwareCommand(BaseCommand):
         except Exception as e:
             logger.error("Volume control error: %s", e)
             assistant.speech.speak("Sorry, I had trouble adjusting the volume.")
+
+    @staticmethod
+    def _get_volume_interface():
+        """
+        Get the Windows IAudioEndpointVolume interface.
+
+        Tries three methods to handle different pycaw versions:
+          1. New pycaw (0.5+): AudioDevice._dev.Activate()
+          2. Old pycaw (<0.5):  device.Activate() directly
+          3. Returns None if pycaw is unavailable (triggers key fallback)
+        """
+        try:
+            from ctypes import cast, POINTER
+            from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+
+            devices = AudioUtilities.GetSpeakers()
+
+            # Try new pycaw API first (AudioDevice wrapper object)
+            try:
+                interface = devices._dev.Activate(
+                    IAudioEndpointVolume._iid_, CLSCTX_ALL, None
+                )
+            except AttributeError:
+                # Fall back to old pycaw API (raw COM interface)
+                interface = devices.Activate(
+                    IAudioEndpointVolume._iid_, CLSCTX_ALL, None
+                )
+
+            return cast(interface, POINTER(IAudioEndpointVolume))
+
+        except ImportError:
+            logger.warning("pycaw not installed — using virtual key fallback.")
+            return None
+        except Exception as e:
+            logger.error("Volume interface error: %s", e)
+            return None
+
+    @staticmethod
+    def _handle_volume_via_keys(query: str, assistant) -> None:
+        """
+        Fallback volume control using Windows virtual key codes.
+        Works without pycaw — simulates the keyboard media keys.
+        Cannot report exact percentage.
+        """
+        import ctypes
+        KEYEVENTF_EXTENDEDKEY = 0x0001
+        KEYEVENTF_KEYUP       = 0x0002
+        VK_VOLUME_UP          = 0xAF
+        VK_VOLUME_DOWN        = 0xAE
+        VK_VOLUME_MUTE        = 0xAD
+
+        def press_key(vk):
+            ctypes.windll.user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0)
+            ctypes.windll.user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+
+        steps = 3  # Each press = ~2% volume change
+
+        if "mute" in query:
+            press_key(VK_VOLUME_MUTE)
+            assistant.speech.speak("Toggling mute.")
+        elif any(w in query for w in ("up", "increase", "raise", "higher")):
+            for _ in range(steps):
+                press_key(VK_VOLUME_UP)
+            assistant.speech.speak("Volume increased.")
+            logger.info("Volume increased via virtual keys.")
+        elif any(w in query for w in ("down", "decrease", "lower", "reduce")):
+            for _ in range(steps):
+                press_key(VK_VOLUME_DOWN)
+            assistant.speech.speak("Volume decreased.")
+            logger.info("Volume decreased via virtual keys.")
+        else:
+            assistant.speech.speak("I'm not sure what volume action you want.")
 
     # ── Brightness Control ──────────────────────────────────────
 

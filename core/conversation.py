@@ -5,6 +5,9 @@ Uses Google Gemini with chat-based sessions to maintain
 context across multiple queries within a single session.
 """
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="google")
+
 import google.generativeai as genai
 
 from utils.logger import get_logger
@@ -21,22 +24,19 @@ SYSTEM_INSTRUCTION = (
     "the user asks for detail. Be conversational and natural."
 )
 
+# Using gemini-2.5-flash — the proven model from the original vega_ai.py
+MODEL_NAME = "gemini-2.5-flash"
+
 
 class AIConversation:
     """
     Manages a Gemini chat session with persistent context.
 
-    Unlike the old generate_content() approach, this uses start_chat()
-    so the model remembers everything said within the session.
+    Uses start_chat() so the model remembers the full conversation
+    history within a session, unlike stateless generate_content().
     """
 
     def __init__(self, settings):
-        """
-        Initialize the AI conversation engine.
-
-        Args:
-            settings: A Settings instance with google_ai_api_key.
-        """
         self._api_key = settings.google_ai_api_key
         self._model = None
         self._chat = None
@@ -47,34 +47,21 @@ class AIConversation:
         if not self._api_key:
             logger.error("Google AI API key is not set.")
             return
-
         try:
             genai.configure(api_key=self._api_key)
             self._model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash",
+                model_name=MODEL_NAME,
                 system_instruction=SYSTEM_INSTRUCTION,
             )
             self._chat = self._model.start_chat(history=[])
-            logger.info("Gemini AI conversation engine initialized.")
+            logger.info("Gemini AI initialized (model=%s).", MODEL_NAME)
         except Exception as e:
             logger.error("Failed to initialize Gemini: %s", e)
 
     def ask(self, query: str) -> str:
-        """
-        Send a query to the AI and get a context-aware response.
-
-        The chat session retains history, so follow-up questions
-        within the same session are understood naturally.
-
-        Args:
-            query: The user's question or statement.
-
-        Returns:
-            Cleaned plain-text response from the AI.
-        """
+        """Send a query and get a context-aware response."""
         if not self._chat:
             return "Sorry, my AI brain is not configured. Please check your API key."
-
         try:
             response = self._chat.send_message(query)
             cleaned = cmd_format(response.text)

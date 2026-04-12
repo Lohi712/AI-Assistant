@@ -7,7 +7,7 @@ optionally summarizes results using the AI engine.
 
 import webbrowser
 
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 
 from commands.base import BaseCommand
 from utils.logger import get_logger

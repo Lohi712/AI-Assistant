@@ -6,6 +6,7 @@ wake word before activating the assistant.
 """
 
 import struct
+from pathlib import Path
 
 import pvporcupine
 import pyaudio
@@ -55,6 +56,23 @@ class WakeWordDetector:
         Returns:
             True if the wake word was detected, False on error.
         """
+        # Pre-flight check: make sure the .ppn model file actually exists
+        if not Path(self._keyword_path).exists():
+            logger.error(
+                "Wake word model file NOT FOUND at: %s\n"
+                "  Fix: Make sure 'Hey-Vega_en_windows_v3_0_0.ppn' is inside the 'assets/' folder.\n"
+                "  Run this in your terminal:\n"
+                "    mkdir assets\n"
+                "    move Hey-Vega_en_windows_v3_0_0.ppn assets\\",
+                self._keyword_path,
+            )
+            print(
+                "\n[ERROR] Wake word model file not found!\n"
+                f"  Expected: {self._keyword_path}\n"
+                "  Fix: Move 'Hey-Vega_en_windows_v3_0_0.ppn' into the 'assets/' folder.\n"
+            )
+            return False   # Stop immediately — do NOT retry in a loop
+
         try:
             self._porcupine = pvporcupine.create(
                 access_key=self._access_key,

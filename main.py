@@ -60,9 +60,13 @@ class VegaAssistant:
         print("=" * 50)
 
         try:
+            consecutive_failures = 0
+            MAX_FAILURES = 3
+
             while True:
                 # Wait for wake word
                 if self.wake_word.wait_for_wake_word():
+                    consecutive_failures = 0  # Reset on success
                     self.speech.greet()
 
                     # Reset AI context for a fresh session
@@ -70,6 +74,19 @@ class VegaAssistant:
 
                     # Command loop — runs until user says exit
                     self._command_loop()
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= MAX_FAILURES:
+                        self.logger.error(
+                            "Wake word detection failed %d times in a row. "
+                            "Please fix the issue above and restart VEGA.",
+                            consecutive_failures,
+                        )
+                        print(
+                            "\n[FATAL] Wake word detection is failing repeatedly.\n"
+                            "Please fix the issue printed above, then run 'python main.py' again.\n"
+                        )
+                        break
 
         except KeyboardInterrupt:
             self.logger.info("Interrupted by user (Ctrl+C).")

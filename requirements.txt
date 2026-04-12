@@ -3,11 +3,14 @@
 # ============================================================
 
 # --- Core AI & Speech ---
-google-generativeai
+google-generativeai        # Legacy fallback
+google-genai               # New Gemini SDK (preferred)
 SpeechRecognition
 pywin32
-pvporcupine
+pvporcupine==3.0.0         # MUST match your .ppn file version (v3_0_0)
 PyAudio
+edge-tts                   # Microsoft Neural TTS (human-like voice)
+pygame                     # Audio playback for neural TTS
 
 # --- Web & Search ---
 requests
