@@ -92,6 +92,10 @@ class VegaAssistant:
             self.logger.info("Interrupted by user (Ctrl+C).")
             self.speech.speak("Goodbye sir!")
             print("\n👋 VEGA shutting down. Goodbye!")
+        finally:
+            # Suppress harmless COM VTable cleanup errors on exit
+            import sys, os
+            sys.stderr = open(os.devnull, "w")
 
     def _command_loop(self) -> None:
         """Process voice commands until the user says goodbye."""

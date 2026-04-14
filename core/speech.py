@@ -79,7 +79,7 @@ class SpeechEngine:
     def __init__(
         self,
         language: str     = "en-in",
-        timeout: int      = 5,
+        timeout: int      = 8,
         phrase_limit: int = 15,
         voice: str        = None,
     ):
@@ -156,13 +156,35 @@ class SpeechEngine:
         with sr.Microphone() as source:
             logger.info("Listening...")
             print("Listening...")
-            self._recognizer.adjust_for_ambient_noise(source, duration=1)
-            self._recognizer.pause_threshold = 1
+
+            # ── Mic sensitivity tuning ──────────────────────────
+            # Short calibration — just enough to gauge background noise
+            self._recognizer.adjust_for_ambient_noise(source, duration=0.5)
+
+            # Lower energy threshold = picks up quieter speech
+            # Default is ~4000 which misses soft/short words
+            self._recognizer.energy_threshold = 300
+
+            # Auto-adapt threshold based on ambient noise over time
+            self._recognizer.dynamic_energy_threshold = True
+            self._recognizer.dynamic_energy_adjustment_damping = 0.15
+            self._recognizer.dynamic_energy_ratio = 1.5
+
+            # How long silence must last before phrase is considered "done"
+            # 1.5s = user can pause to think mid-sentence without being cut off
+            self._recognizer.pause_threshold = 1.5
+
+            # Minimum audio length that counts as a phrase (seconds)
+            self._recognizer.phrase_threshold = 0.15
+
+            # Grace period: won't cut off if speech resumes within this window
+            self._recognizer.non_speaking_duration = 1.0
+
             try:
                 audio = self._recognizer.listen(
                     source,
                     timeout=self._timeout,
-                    phrase_time_limit=self._phrase_limit,
+                    phrase_time_limit=30,  # Allow up to 30s for long inputs
                 )
             except sr.WaitTimeoutError:
                 self.speak("I didn't hear anything, please try again.")
@@ -187,13 +209,15 @@ class SpeechEngine:
         """Greet the user based on time of day."""
         hour = datetime.datetime.now().hour
         if hour < 12:
-            self.speak("Good Morning Sir!")
+            greeting = "Good Morning Sir!"
         elif hour < 18:
-            self.speak("Good Afternoon Sir!")
+            greeting = "Good Afternoon Sir!"
         else:
-            self.speak("Good Evening Sir!")
+            greeting = "Good Evening Sir!"
+
+        # Single speak() call — no gap between greeting and intro
         self.speak(
-            "This is VEGA, your Virtual Enhanced General Assistant. "
+            f"{greeting} This is VEGA, your Virtual Enhanced General Assistant. "
             "How may I help you today?"
         )
 
