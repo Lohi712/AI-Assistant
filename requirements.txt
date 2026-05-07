@@ -26,6 +26,11 @@ screen-brightness-control
 pycaw
 comtypes
 
+# --- File System & System Control ---
+psutil                     # Battery, CPU, RAM, process management
+pyperclip                  # Clipboard read/write
+winshell                   # Recycle bin management
+
 # --- Communication ---
 # smtplib is part of the Python standard library
 

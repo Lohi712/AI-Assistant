@@ -2,11 +2,14 @@
 System commands for VEGA AI Assistant.
 
 Handles application launching, time/date, screenshots,
-lock screen, shutdown, restart, and other system operations.
+lock screen, shutdown, restart, battery, system info,
+clipboard, recycle bin, and other system operations.
 """
 
 import datetime
 import os
+import platform
+import socket
 import subprocess
 import time
 
@@ -57,7 +60,8 @@ APP_MAP = {
 class SystemCommand(BaseCommand):
     """
     System-level commands: launch apps, tell time/date,
-    take screenshots, lock/sleep/shutdown/restart.
+    take screenshots, lock/sleep/shutdown/restart,
+    battery status, system info, clipboard, recycle bin.
     """
 
     priority = 10  # High priority for system commands
@@ -72,6 +76,18 @@ class SystemCommand(BaseCommand):
             "shutdown", "shut down", "turn off",
             "restart", "reboot",
             "sleep", "hibernate",
+            # Battery
+            "battery", "battery status", "battery level",
+            "charging", "am i charging", "power status",
+            # System info
+            "system info", "system information", "about my laptop",
+            "my computer", "computer specs", "my system", "system specs",
+            # Clipboard
+            "clipboard", "clear clipboard", "read clipboard",
+            "what's in clipboard", "copy clipboard",
+            # Recycle bin
+            "recycle bin", "empty recycle", "empty trash",
+            "clear recycle", "empty the recycle",
         ]
 
     def match(self, query: str) -> bool:
@@ -90,6 +106,27 @@ class SystemCommand(BaseCommand):
         return any(trigger in query for trigger in self.triggers if trigger != "open")
 
     def execute(self, query: str, assistant) -> None:
+        # ── Battery ──
+        if any(t in query for t in ("battery", "charging", "power status")):
+            self._battery_status(assistant)
+            return
+
+        # ── System Info ──
+        if any(t in query for t in ("system info", "system information", "about my laptop",
+                                     "computer specs", "my system", "my computer", "system specs")):
+            self._system_info(assistant)
+            return
+
+        # ── Clipboard ──
+        if "clipboard" in query:
+            self._clipboard(query, assistant)
+            return
+
+        # ── Recycle Bin ──
+        if any(t in query for t in ("recycle bin", "recycle", "empty trash")):
+            self._empty_recycle_bin(assistant)
+            return
+
         # ── Time ──
         if "time" in query:
             now = datetime.datetime.now()
@@ -234,3 +271,205 @@ class SystemCommand(BaseCommand):
         except Exception as e:
             logger.error("Screenshot error: %s", e)
             assistant.speech.speak("Sorry, I couldn't take a screenshot.")
+
+    # ── Battery Status ────────────────────────────────────────────
+
+    @staticmethod
+    def _battery_status(assistant) -> None:
+        """Report battery percentage, charging state, and time remaining."""
+        try:
+            import psutil
+            battery = psutil.sensors_battery()
+
+            if battery is None:
+                assistant.speech.speak(
+                    "I couldn't detect a battery. This might be a desktop computer."
+                )
+                return
+
+            percent = battery.percent
+            plugged = battery.power_plugged
+            secs_left = battery.secsleft
+
+            status = "plugged in and charging" if plugged else "on battery power"
+
+            # Time remaining
+            if secs_left == -1 or secs_left == psutil.POWER_TIME_UNLIMITED:
+                time_str = ""
+            elif secs_left == psutil.POWER_TIME_UNKNOWN:
+                time_str = ""
+            else:
+                hours = secs_left // 3600
+                mins = (secs_left % 3600) // 60
+                time_str = f" with about {hours} hours and {mins} minutes remaining" if hours > 0 else f" with about {mins} minutes remaining"
+
+            print(f"\n🔋 Battery: {percent}% | {'⚡ Charging' if plugged else '🔌 On battery'}{time_str}\n")
+
+            assistant.speech.speak(
+                f"Battery is at {percent} percent, {status}{time_str}."
+            )
+            logger.info("Battery: %d%%, plugged=%s", percent, plugged)
+
+        except ImportError:
+            assistant.speech.speak(
+                "Battery monitoring requires psutil. "
+                "Please install it with pip install psutil."
+            )
+        except Exception as e:
+            logger.error("Battery check error: %s", e)
+            assistant.speech.speak("Sorry, I couldn't check the battery status.")
+
+    # ── System Info ───────────────────────────────────────────────
+
+    @staticmethod
+    def _system_info(assistant) -> None:
+        """Report comprehensive system information."""
+        try:
+            import psutil
+            import shutil
+
+            # OS info
+            os_name = platform.system()
+            os_version = platform.version()
+            os_release = platform.release()
+            machine = platform.machine()
+            processor = platform.processor() or "Unknown"
+            hostname = socket.gethostname()
+
+            # CPU info
+            cpu_count = psutil.cpu_count(logical=True)
+            cpu_physical = psutil.cpu_count(logical=False)
+            cpu_percent = psutil.cpu_percent(interval=0.5)
+
+            # RAM info
+            ram = psutil.virtual_memory()
+            ram_total_gb = ram.total / (1024 ** 3)
+            ram_used_gb = ram.used / (1024 ** 3)
+            ram_free_gb = ram.available / (1024 ** 3)
+
+            # IP address
+            try:
+                ip = socket.gethostbyname(socket.gethostname())
+            except Exception:
+                ip = "Unknown"
+
+            info = (
+                f"\n💻 System Information:\n"
+                f"   ─────────────────────────────────\n"
+                f"   Computer:   {hostname}\n"
+                f"   OS:         {os_name} {os_release} ({os_version})\n"
+                f"   Arch:       {machine}\n"
+                f"   Processor:  {processor}\n"
+                f"   CPU Cores:  {cpu_physical} physical / {cpu_count} logical\n"
+                f"   CPU Usage:  {cpu_percent}%\n"
+                f"   RAM:        {ram_used_gb:.1f} GB / {ram_total_gb:.1f} GB ({ram.percent}% used)\n"
+                f"   Free RAM:   {ram_free_gb:.1f} GB\n"
+                f"   IP Address: {ip}\n"
+            )
+
+            # Disk info
+            partitions = psutil.disk_partitions()
+            for part in partitions:
+                try:
+                    usage = shutil.disk_usage(part.mountpoint)
+                    total_gb = usage.total / (1024 ** 3)
+                    free_gb = usage.free / (1024 ** 3)
+                    info += f"   Drive {part.mountpoint}  {free_gb:.1f} GB free / {total_gb:.1f} GB total\n"
+                except (PermissionError, OSError):
+                    continue
+
+            info += "   ─────────────────────────────────\n"
+            print(info)
+
+            assistant.speech.speak(
+                f"You're running {os_name} {os_release} on a {machine} machine. "
+                f"CPU is at {cpu_percent}%, "
+                f"RAM is {ram.percent}% used with {ram_free_gb:.1f} gigabytes free. "
+                "Check the console for full details."
+            )
+            logger.info("System info displayed.")
+
+        except ImportError:
+            assistant.speech.speak(
+                "System info requires psutil. "
+                "Please install it with pip install psutil."
+            )
+        except Exception as e:
+            logger.error("System info error: %s", e)
+            assistant.speech.speak("Sorry, I had trouble getting system information.")
+
+    # ── Clipboard ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _clipboard(query: str, assistant) -> None:
+        """Read or clear the clipboard."""
+        try:
+            import pyperclip
+
+            if any(w in query for w in ("clear", "empty", "wipe")):
+                pyperclip.copy("")
+                assistant.speech.speak("Clipboard cleared.")
+                print("📋 Clipboard: Cleared")
+                logger.info("Clipboard cleared.")
+            else:
+                content = pyperclip.paste()
+                if content:
+                    # Truncate for speech
+                    preview = content[:200]
+                    print(f"\n📋 Clipboard contents:\n   {content[:500]}\n")
+                    assistant.speech.speak(
+                        f"The clipboard contains: {preview}"
+                    )
+                else:
+                    assistant.speech.speak("The clipboard is empty.")
+                    print("📋 Clipboard: Empty")
+
+        except ImportError:
+            assistant.speech.speak(
+                "Clipboard access requires pyperclip. "
+                "Please install it with pip install pyperclip."
+            )
+        except Exception as e:
+            logger.error("Clipboard error: %s", e)
+            assistant.speech.speak("Sorry, I had trouble accessing the clipboard.")
+
+    # ── Recycle Bin ────────────────────────────────────────────────
+
+    @staticmethod
+    def _empty_recycle_bin(assistant) -> None:
+        """Empty the recycle bin with confirmation."""
+        assistant.speech.speak(
+            "Are you sure you want to empty the recycle bin? "
+            "This cannot be undone. Say yes to confirm."
+        )
+        confirm = assistant.speech.listen().lower()
+
+        if "yes" not in confirm and "confirm" not in confirm:
+            assistant.speech.speak("Recycle bin emptying cancelled.")
+            return
+
+        try:
+            import winshell
+            winshell.recycle_bin().empty(
+                confirm=False, show_progress=False, sound=True
+            )
+            assistant.speech.speak("Recycle bin emptied successfully.")
+            print("🗑️  Recycle bin: Emptied")
+            logger.info("Recycle bin emptied.")
+        except ImportError:
+            # Fallback: use PowerShell
+            try:
+                subprocess.run(
+                    ["powershell", "-Command",
+                     "Clear-RecycleBin -Force -ErrorAction SilentlyContinue"],
+                    capture_output=True, timeout=10,
+                )
+                assistant.speech.speak("Recycle bin emptied.")
+                print("🗑️  Recycle bin: Emptied (via PowerShell)")
+                logger.info("Recycle bin emptied via PowerShell.")
+            except Exception as e:
+                logger.error("Recycle bin error: %s", e)
+                assistant.speech.speak("Sorry, I couldn't empty the recycle bin.")
+        except Exception as e:
+            logger.error("Recycle bin error: %s", e)
+            assistant.speech.speak("Sorry, I couldn't empty the recycle bin.")

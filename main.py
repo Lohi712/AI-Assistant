@@ -61,7 +61,7 @@ class VegaAssistant:
 
         try:
             consecutive_failures = 0
-            MAX_FAILURES = 3
+            MAX_FAILURES = 10  # More forgiving — mic glitches shouldn't kill VEGA
 
             while True:
                 # Wait for wake word
@@ -99,7 +99,11 @@ class VegaAssistant:
 
     def _command_loop(self) -> None:
         """Process voice commands until the user says goodbye."""
-        EXIT_PHRASES = ("go to sleep", "bye", "exit", "quit", "goodbye", "stop")
+        # Only specific phrases exit — NOT "stop" (conflicts with "stop searching" etc.)
+        EXIT_PHRASES = (
+            "go to sleep", "bye", "exit", "quit", "goodbye",
+            "vega sleep", "that's all", "i'm done",
+        )
 
         while True:
             query = self.speech.listen().lower()
@@ -108,15 +112,36 @@ class VegaAssistant:
             if query in ("none", ""):
                 continue
 
-            # Check for exit commands
-            if any(phrase in query for phrase in EXIT_PHRASES):
+            # Check for exit commands — the query must closely match
+            # an exit phrase, not just contain one as a substring
+            query_stripped = query.strip()
+            is_exit = False
+            for phrase in EXIT_PHRASES:
+                # Match if query IS the phrase, or starts/ends with it
+                if (query_stripped == phrase
+                        or query_stripped.startswith(phrase + " ")
+                        or query_stripped.endswith(" " + phrase)):
+                    is_exit = True
+                    break
+
+            if is_exit:
                 self.speech.speak("Goodbye Sir! Going to sleep now.")
                 self.logger.info("User exited command loop.")
                 print("💤 VEGA going to sleep...\n")
                 break
 
-            # Dispatch to the matching command
-            self.registry.dispatch(query)
+            # Dispatch to the matching command (protected from crashes)
+            try:
+                self.registry.dispatch(query)
+            except Exception as e:
+                self.logger.error(
+                    "Command crashed (VEGA stays alive): %s", e, exc_info=True
+                )
+                self.speech.speak(
+                    "Something went wrong with that command, but I'm still here. "
+                    "What else can I help with?"
+                )
+                print(f"⚠️  Command error: {e}")
 
 
 def main():
