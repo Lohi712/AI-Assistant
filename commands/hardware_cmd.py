@@ -38,6 +38,10 @@ class HardwareCommand(BaseCommand):
 
     priority = 15
 
+    def __init__(self):
+        super().__init__()
+        self.last_target = "volume"  # default context
+
     @property
     def triggers(self) -> list[str]:
         return [
@@ -50,10 +54,27 @@ class HardwareCommand(BaseCommand):
             "louder", "softer", "quieter",
         ]
 
+    def match_followup(self, query: str) -> bool:
+        followup_words = [
+            "increase", "decrease", "more", "less", "higher", "lower",
+            "up", "down", "mute", "unmute", "louder", "softer", "quieter", "set"
+        ]
+        return any(word in query for word in followup_words)
+
     def execute(self, query: str, assistant) -> None:
+        # Determine target from query, or fall back to context
         if "volume" in query or "mute" in query or "louder" in query or "softer" in query or "quieter" in query:
-            self._handle_volume(query, assistant)
+            target = "volume"
         elif "brightness" in query:
+            target = "brightness"
+        else:
+            target = self.last_target
+
+        self.last_target = target
+
+        if target == "volume":
+            self._handle_volume(query, assistant)
+        elif target == "brightness":
             self._handle_brightness(query, assistant)
 
     # ── Volume Control (via Windows Virtual Keys) ────────────────

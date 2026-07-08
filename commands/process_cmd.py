@@ -285,7 +285,10 @@ class ProcessCommand(BaseCommand):
 
         if not process_name:
             assistant.speech.speak("Which process would you like me to kill?")
-            process_name = assistant.speech.listen().strip()
+            process_name = assistant.speech.listen()
+            if not process_name:
+                process_name = "none"
+            process_name = process_name.strip()
             if process_name.lower() in ("none", ""):
                 return
 
@@ -294,7 +297,10 @@ class ProcessCommand(BaseCommand):
             f"Are you sure you want to kill all {process_name} processes? "
             "Say yes to confirm."
         )
-        confirm = assistant.speech.listen().lower()
+        confirm = assistant.speech.listen()
+        if not confirm:
+            confirm = "none"
+        confirm = confirm.lower()
 
         if "yes" in confirm or "confirm" in confirm:
             try:

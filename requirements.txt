@@ -10,26 +10,28 @@ pywin32
 pvporcupine==3.0.0         # MUST match your .ppn file version (v3_0_0)
 PyAudio
 edge-tts                   # Microsoft Neural TTS (human-like voice)
-pygame                     # Audio playback for neural TTS
 
 # --- Web & Search ---
 requests
-beautifulsoup4
 wikipedia
 duckduckgo-search
 pywhatkit
+
+# --- Browser Automation ---
+playwright
 
 # --- System Automation ---
 pyautogui
 AppOpener
 screen-brightness-control
-pycaw
 comtypes
+winsdk                     # WinRT API access for Bluetooth/Hotspot
 
 # --- File System & System Control ---
 psutil                     # Battery, CPU, RAM, process management
 pyperclip                  # Clipboard read/write
 winshell                   # Recycle bin management
+nightlight                 # Headless nightlight control
 
 # --- Communication ---
 # smtplib is part of the Python standard library

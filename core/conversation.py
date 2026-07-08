@@ -77,6 +77,23 @@ class AIConversation:
             self._chat = self._model.start_chat(history=[])
             logger.info("AI conversation session reset.")
 
+    def inject_context(self, text: str) -> None:
+        """
+        Feed a system-level note into the conversation so the AI
+        knows what command was just executed.  Uses a silent
+        round-trip: we send the note and discard the reply.
+        """
+        if not self._chat:
+            return
+        try:
+            self._chat.send_message(
+                f"[System context — do not repeat this to the user, just "
+                f"remember it for context]: {text}"
+            )
+            logger.debug("Injected context: %s", text[:80])
+        except Exception as e:
+            logger.debug("Context injection skipped: %s", e)
+
     @property
     def has_context(self) -> bool:
         """Check if there's any conversation history."""

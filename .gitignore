@@ -206,3 +206,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# WhatsApp automation sessions and test screenshots
+.whatsapp_session/
+.whatsapp_test_session/
+.whatsapp_test_session2/
+.whatsapp_contacts.txt
+*_test.png
+*_test2.png
+chromium_test.png
+

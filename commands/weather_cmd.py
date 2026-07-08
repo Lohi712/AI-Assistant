@@ -36,7 +36,10 @@ class WeatherCommand(BaseCommand):
 
         if not city_name:
             assistant.speech.speak("Which city's weather would you like to know?")
-            city_name = assistant.speech.listen().lower()
+            city_name = assistant.speech.listen()
+            if not city_name:
+                city_name = "none"
+            city_name = city_name.lower()
             if city_name in ("none", ""):
                 assistant.speech.speak("I didn't catch the city name.")
                 return

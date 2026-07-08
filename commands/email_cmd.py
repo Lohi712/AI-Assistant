@@ -44,23 +44,38 @@ class EmailCommand(BaseCommand):
         # Collect subject
         assistant.speech.speak("What is the subject of the email?")
         subject = assistant.speech.listen()
-        while subject == "None":
+        retries = 0
+        while subject == "None" and retries < 3:
             assistant.speech.speak("I didn't catch the subject. Please try again.")
             subject = assistant.speech.listen()
+            retries += 1
+            
+        if subject == "None":
+            assistant.speech.speak("I couldn't get the subject. Cancelling email.")
+            return
 
         # Collect body
         assistant.speech.speak("Now, please say the body of your email.")
         body = assistant.speech.listen()
-        while body == "None":
+        retries = 0
+        while body == "None" and retries < 3:
             assistant.speech.speak("Sorry, I didn't get the body. Please try again.")
             body = assistant.speech.listen()
+            retries += 1
+            
+        if body == "None":
+            assistant.speech.speak("I couldn't get the body. Cancelling email.")
+            return
 
         # Confirm before sending
         assistant.speech.speak(
             f"Sending email to {recipient} with subject: {subject}. "
             "Shall I proceed? Say yes or no."
         )
-        confirm = assistant.speech.listen().lower()
+        confirm = assistant.speech.listen()
+        if not confirm:
+            confirm = "none"
+        confirm = confirm.lower()
         if "yes" not in confirm and "yeah" not in confirm and "send" not in confirm:
             assistant.speech.speak("Email cancelled.")
             return

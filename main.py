@@ -69,8 +69,9 @@ class VegaAssistant:
                     consecutive_failures = 0  # Reset on success
                     self.speech.greet()
 
-                    # Reset AI context for a fresh session
-                    self.ai.reset_session()
+                    # AI context is NOT reset here — VEGA remembers the
+                    # full conversation across wake word activations.
+                    # Say "reset conversation" to clear it manually.
 
                     # Command loop — runs until user says exit
                     self._command_loop()
@@ -101,13 +102,22 @@ class VegaAssistant:
         """Process voice commands until the user says goodbye."""
         # Only specific phrases exit — NOT "stop" (conflicts with "stop searching" etc.)
         EXIT_PHRASES = (
-            "go to sleep", "bye", "exit", "quit", "goodbye",
-            "vega sleep", "that's all", "i'm done",
+            "go to sleep", "bye vega", "exit", "quit", "goodbye",
+            "vega sleep", "that's all", "i'm done", "hey vega",
+            "bye", "ok bye", "okay bye"
+        )
+
+        # Commands that reset the AI memory
+        RESET_PHRASES = (
+            "reset conversation", "forget everything",
+            "clear memory", "start over", "new conversation",
         )
 
         while True:
-            query = self.speech.listen().lower()
-
+            query = self.speech.listen()
+            if not query or query.lower() == "none":
+                continue
+            query = query.lower()
             # Skip empty / failed recognitions
             if query in ("none", ""):
                 continue
@@ -129,6 +139,15 @@ class VegaAssistant:
                 self.logger.info("User exited command loop.")
                 print("💤 VEGA going to sleep...\n")
                 break
+
+            # Check for conversation reset commands
+            if query_stripped in RESET_PHRASES:
+                self.ai.reset_session()
+                self.speech.speak(
+                    "Conversation memory cleared. Starting fresh!"
+                )
+                print("🧹 Conversation reset.")
+                continue
 
             # Dispatch to the matching command (protected from crashes)
             try:

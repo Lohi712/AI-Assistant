@@ -158,8 +158,10 @@ class SpeechEngine:
             print("Listening...")
 
             # ── Mic sensitivity tuning ──────────────────────────
-            # Short calibration — just enough to gauge background noise
-            self._recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            # Calibrate ambient noise only once at startup to prevent lag on subsequent calls
+            if not getattr(self, '_ambient_noise_adjusted', False):
+                self._recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                self._ambient_noise_adjusted = True
 
             # Lower energy threshold = picks up quieter speech
             # Default is ~4000 which misses soft/short words

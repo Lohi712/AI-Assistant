@@ -47,6 +47,15 @@ class BaseCommand(ABC):
         """
         return any(trigger in query for trigger in self.triggers)
 
+    def match_followup(self, query: str) -> bool:
+        """
+        Check if the user query is a follow-up to this command.
+        
+        This enables context-awareness. E.g. "change volume" followed by "increase it".
+        Default implementation returns False.
+        """
+        return False
+
     @abstractmethod
     def execute(self, query: str, assistant) -> None:
         """

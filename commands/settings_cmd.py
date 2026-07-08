@@ -56,6 +56,10 @@ class SettingsCommand(BaseCommand):
 
     priority = 12
 
+    def __init__(self):
+        super().__init__()
+        self.last_target = None  # "theme", "wallpaper", "night_light", "power", "dnd"
+
     @property
     def triggers(self) -> list[str]:
         return [
@@ -81,25 +85,37 @@ class SettingsCommand(BaseCommand):
             "dnd", "quiet mode",
         ]
 
+    def match_followup(self, query: str) -> bool:
+        """Match follow-ups like 'turn it on', 'increase it', 'change it'."""
+        followup_words = [
+            "on", "off", "enable", "disable", "turn on", "turn off",
+            "increase", "decrease", "change", "switch", "toggle",
+        ]
+        return any(word in query for word in followup_words)
+
     def execute(self, query: str, assistant) -> None:
         # ── Dark/Light mode ──
         if any(t in query for t in ("dark mode", "dark theme", "switch to dark",
                                      "enable dark", "turn on dark")):
+            self.last_target = "theme"
             self._set_theme(dark=True, assistant=assistant)
             return
 
         if any(t in query for t in ("light mode", "light theme", "switch to light",
                                      "enable light", "turn on light")):
+            self.last_target = "theme"
             self._set_theme(dark=False, assistant=assistant)
             return
 
         # ── Wallpaper ──
         if any(t in query for t in ("wallpaper", "desktop background")):
+            self.last_target = "wallpaper"
             self._change_wallpaper(assistant)
             return
 
         # ── Night light ──
         if any(t in query for t in ("night light", "blue light", "warm light", "eye protection")):
+            self.last_target = "night_light"
             # Check if user wants to set strength/intensity
             import re
             has_number = re.search(r'\b(\d+)\b', query)
@@ -111,7 +127,10 @@ class SettingsCommand(BaseCommand):
             elif is_strength and not has_number:
                 # They said "strength" but no number — ask for it
                 assistant.speech.speak("What strength level? Say a number from 0 to 100.")
-                response = assistant.speech.listen().strip()
+                response = assistant.speech.listen()
+                if not response:
+                    response = "none"
+                response = response.strip()
                 num_match = re.search(r'\b(\d+)\b', response)
                 if num_match:
                     self._set_night_light_strength(int(num_match.group(1)), assistant)
@@ -125,12 +144,28 @@ class SettingsCommand(BaseCommand):
         if any(t in query for t in ("power saver", "high performance", "balanced",
                                      "gaming mode", "power plan", "performance mode",
                                      "battery saver", "save power", "normal mode")):
+            self.last_target = "power"
             self._set_power_plan(query, assistant)
             return
 
         # ── Do Not Disturb ──
         if any(t in query for t in ("do not disturb", "focus mode", "focus assist",
                                      "dnd", "quiet mode")):
+            self.last_target = "dnd"
+            self._toggle_dnd(query, assistant)
+            return
+
+        # ── Context follow-up: route based on last_target ──
+        if self.last_target == "night_light":
+            self._toggle_night_light(query, assistant)
+            return
+        if self.last_target == "theme":
+            if any(w in query for w in ("dark", "on", "enable")):
+                self._set_theme(dark=True, assistant=assistant)
+            else:
+                self._set_theme(dark=False, assistant=assistant)
+            return
+        if self.last_target == "dnd":
             self._toggle_dnd(query, assistant)
             return
 
@@ -201,7 +236,10 @@ class SettingsCommand(BaseCommand):
             "You can create a 'Wallpapers' folder in your Pictures directory "
             "and add images there. Or tell me the full path to an image."
         )
-        user_input = assistant.speech.listen().strip()
+        user_input = assistant.speech.listen()
+        if not user_input:
+            user_input = "none"
+        user_input = user_input.strip()
         if user_input.lower() in ("none", ""):
             return
 

@@ -26,6 +26,14 @@ class MediaCommand(BaseCommand):
         words = query.split()
         return "play" in words
 
+    def match_followup(self, query: str) -> bool:
+        """Match follow-ups like 'pause', 'next', 'stop', 'play again'."""
+        followup_words = [
+            "pause", "stop", "next", "previous", "skip",
+            "play", "resume", "again",
+        ]
+        return any(word in query for word in followup_words)
+
     def execute(self, query: str, assistant) -> None:
         song = query.replace("play", "").strip()
 

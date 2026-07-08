@@ -64,6 +64,11 @@ class BrowserCommand(BaseCommand):
             or site_name.endswith(".org")
         )
 
+    def match_followup(self, query: str) -> bool:
+        """Match follow-ups like 'open <site>', 'go to <site>'."""
+        followup_words = ["open", "go to", "visit", "browse"]
+        return any(word in query for word in followup_words)
+
     def execute(self, query: str, assistant) -> None:
         site_name = query.replace("open", "").strip()
 

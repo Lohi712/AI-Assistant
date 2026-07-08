@@ -411,7 +411,10 @@ class DiskCommand(BaseCommand):
             "Would you like me to clean them up? Say yes to confirm."
         )
 
-        confirm = assistant.speech.listen().lower()
+        confirm = assistant.speech.listen()
+        if not confirm:
+            confirm = "none"
+        confirm = confirm.lower()
         if "yes" in confirm or "confirm" in confirm or "clean" in confirm:
             cleaned = 0
             freed = 0
@@ -450,7 +453,10 @@ class DiskCommand(BaseCommand):
 
         if not target:
             assistant.speech.speak("Which folder would you like me to check the size of?")
-            folder_name = assistant.speech.listen().strip().lower()
+            folder_name = assistant.speech.listen()
+            if not folder_name:
+                folder_name = "none"
+            folder_name = folder_name.strip().lower()
             if folder_name in ("none", ""):
                 return
             if folder_name in KNOWN_FOLDERS:

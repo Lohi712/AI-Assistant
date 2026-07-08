@@ -73,7 +73,7 @@ class SystemCommand(BaseCommand):
             "the time", "the date", "what time", "what date",
             "screenshot", "take a screenshot",
             "lock", "lock screen", "lock the computer",
-            "shutdown", "shut down", "turn off",
+            "shutdown", "shut down", "turn off computer", "turn off pc",
             "restart", "reboot",
             "sleep", "hibernate",
             # Battery
@@ -89,6 +89,13 @@ class SystemCommand(BaseCommand):
             "recycle bin", "empty recycle", "empty trash",
             "clear recycle", "empty the recycle",
         ]
+
+    def match_followup(self, query: str) -> bool:
+        """Match follow-ups like 'open <app>' after a previous system command."""
+        followup_words = [
+            "open", "launch", "start", "close", "again",
+        ]
+        return any(word in query for word in followup_words)
 
     def match(self, query: str) -> bool:
         # For "open" commands, only match if it's NOT a known website
@@ -155,11 +162,14 @@ class SystemCommand(BaseCommand):
             return
 
         # ── Shutdown ──
-        if "shutdown" in query or "shut down" in query or "turn off" in query:
+        if "shutdown" in query or "shut down" in query or "turn off computer" in query or "turn off pc" in query:
             assistant.speech.speak(
                 "Are you sure you want to shut down? Say yes to confirm."
             )
-            confirm = assistant.speech.listen().lower()
+            confirm = assistant.speech.listen()
+            if not confirm:
+                confirm = "none"
+            confirm = confirm.lower()
             if "yes" in confirm:
                 assistant.speech.speak("Shutting down in 10 seconds.")
                 os.system("shutdown /s /t 10")
@@ -172,7 +182,10 @@ class SystemCommand(BaseCommand):
             assistant.speech.speak(
                 "Are you sure you want to restart? Say yes to confirm."
             )
-            confirm = assistant.speech.listen().lower()
+            confirm = assistant.speech.listen()
+            if not confirm:
+                confirm = "none"
+            confirm = confirm.lower()
             if "yes" in confirm:
                 assistant.speech.speak("Restarting in 10 seconds.")
                 os.system("shutdown /r /t 10")
@@ -184,8 +197,21 @@ class SystemCommand(BaseCommand):
         if "sleep" in query or "hibernate" in query:
             # Don't trigger on "go to sleep" (exit command)
             if "go to sleep" not in query:
-                assistant.speech.speak("Putting the computer to sleep.")
-                os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
+                action = "hibernate" if "hibernate" in query else "sleep"
+                assistant.speech.speak(
+                    f"Are you sure you want to put the computer to {action}? Say yes to confirm."
+                )
+                confirm = assistant.speech.listen()
+                if not confirm:
+                    confirm = "none"
+                confirm = confirm.lower()
+                if "yes" in confirm:
+                    assistant.speech.speak(f"Putting the computer to {action}.")
+                    # SetSuspendState parameters: Hibernate (0=sleep, 1=hibernate), Force, DisableWakeEvents
+                    state = "1" if action == "hibernate" else "0"
+                    os.system(f"rundll32.exe powrprof.dll,SetSuspendState {state},1,0")
+                else:
+                    assistant.speech.speak(f"{action.capitalize()} cancelled.")
                 return
 
         # ── Open Application ──
@@ -208,7 +234,10 @@ class SystemCommand(BaseCommand):
         """
         if not app_name:
             assistant.speech.speak("What application would you like me to open?")
-            app_name = assistant.speech.listen().lower()
+            app_name = assistant.speech.listen()
+            if not app_name:
+                app_name = "none"
+            app_name = app_name.lower()
             if app_name in ("none", ""):
                 return
 
@@ -442,7 +471,10 @@ class SystemCommand(BaseCommand):
             "Are you sure you want to empty the recycle bin? "
             "This cannot be undone. Say yes to confirm."
         )
-        confirm = assistant.speech.listen().lower()
+        confirm = assistant.speech.listen()
+        if not confirm:
+            confirm = "none"
+        confirm = confirm.lower()
 
         if "yes" not in confirm and "confirm" not in confirm:
             assistant.speech.speak("Recycle bin emptying cancelled.")

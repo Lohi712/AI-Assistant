@@ -345,7 +345,10 @@ class FileCommand(BaseCommand):
 
         if "open folder" in query or "go to folder" in query:
             assistant.speech.speak("Which folder would you like me to open?")
-            folder = assistant.speech.listen().strip()
+            folder = assistant.speech.listen()
+            if not folder:
+                folder = "none"
+            folder = folder.strip()
             if folder and folder.lower() not in ("none", ""):
                 # Check known folders first
                 folder_lower = folder.lower()
@@ -411,7 +414,10 @@ class FileCommand(BaseCommand):
 
             if not search_term:
                 assistant.speech.speak("What file would you like me to search for?")
-                search_term = assistant.speech.listen().strip().lower()
+                search_term = assistant.speech.listen()
+                if not search_term:
+                    search_term = "none"
+                search_term = search_term.strip().lower()
                 if search_term in ("none", ""):
                     return
 
@@ -574,7 +580,10 @@ class FileCommand(BaseCommand):
             )
         else:
             assistant.speech.speak("Please tell me the file name or path.")
-            user_input = assistant.speech.listen().strip()
+            user_input = assistant.speech.listen()
+            if not user_input:
+                user_input = "none"
+            user_input = user_input.strip()
             if user_input.lower() in ("none", ""):
                 return
 
@@ -687,7 +696,10 @@ class FileCommand(BaseCommand):
         assistant.speech.speak(
             f"Are you sure you want to delete {name}? Say yes to confirm."
         )
-        confirm = assistant.speech.listen().lower()
+        confirm = assistant.speech.listen()
+        if not confirm:
+            confirm = "none"
+        confirm = confirm.lower()
 
         if "yes" in confirm or "confirm" in confirm:
             try:
@@ -711,9 +723,11 @@ class FileCommand(BaseCommand):
         name = os.path.basename(path)
 
         assistant.speech.speak(f"What would you like to rename {name} to?")
-        new_name = assistant.speech.listen().strip()
-        if new_name.lower() in ("none", ""):
+        new_name = assistant.speech.listen()
+        if not new_name or new_name.lower() == "none":
+            assistant.speech.speak("I didn't catch the new name.")
             return
+        new_name = new_name.strip()
 
         try:
             directory = os.path.dirname(path)
@@ -736,9 +750,11 @@ class FileCommand(BaseCommand):
         name = os.path.basename(path)
 
         assistant.speech.speak(f"Where would you like to copy {name}? Say a folder name like downloads or documents.")
-        dest = assistant.speech.listen().strip().lower()
-        if dest in ("none", ""):
+        target_folder = assistant.speech.listen()
+        if not target_folder or target_folder.lower() == "none":
+            assistant.speech.speak("I didn't catch the destination folder.")
             return
+        dest = target_folder.strip().lower()
 
         # Map to known folders
         dest_path = KNOWN_FOLDERS.get(dest, dest)
@@ -764,7 +780,10 @@ class FileCommand(BaseCommand):
         name = os.path.basename(path)
 
         assistant.speech.speak(f"Where would you like to move {name}? Say a folder name like downloads or documents.")
-        dest = assistant.speech.listen().strip().lower()
+        dest = assistant.speech.listen()
+        if not dest:
+            dest = "none"
+        dest = dest.strip().lower()
         if dest in ("none", ""):
             return
 
@@ -776,7 +795,10 @@ class FileCommand(BaseCommand):
         assistant.speech.speak(
             f"Moving {name} to {dest}. Say yes to confirm."
         )
-        confirm = assistant.speech.listen().lower()
+        confirm = assistant.speech.listen()
+        if not confirm:
+            confirm = "none"
+        confirm = confirm.lower()
 
         if "yes" in confirm or "confirm" in confirm:
             try:

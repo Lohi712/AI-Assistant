@@ -35,7 +35,10 @@ class WebSearchCommand(BaseCommand):
 
         if not search_term:
             assistant.speech.speak("What would you like to search for?")
-            search_term = assistant.speech.listen().lower()
+            search_term = assistant.speech.listen()
+            if not search_term:
+                search_term = "none"
+            search_term = search_term.lower()
             if search_term in ("none", ""):
                 return
 

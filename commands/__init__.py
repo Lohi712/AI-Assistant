@@ -32,6 +32,7 @@ class CommandRegistry:
             assistant: The VegaAssistant instance (passed to commands on execute).
         """
         self._assistant = assistant
+        self._assistant.last_command = None
         self._commands: list[BaseCommand] = []
         self._discover_commands()
 
@@ -80,11 +81,29 @@ class CommandRegistry:
         Returns:
             True if a command handled the query, False otherwise.
         """
+        # First, check if this is a follow-up to the last executed command
+        if hasattr(self._assistant, 'last_command') and self._assistant.last_command is not None:
+            if self._assistant.last_command.match_followup(query):
+                logger.info("Context follow-up matched: %s", self._assistant.last_command.__class__.__name__)
+                try:
+                    self._assistant.last_command.execute(query, self._assistant)
+                except Exception as e:
+                    logger.error("Follow-up command %s failed: %s", self._assistant.last_command.__class__.__name__, e)
+                    self._assistant.speech.speak("Sorry, I encountered an error with that follow-up.")
+                return True
+
+        # Otherwise, fall back to normal command dispatch
         for cmd in self._commands:
             if cmd.match(query):
                 logger.info("Dispatching to %s", cmd.__class__.__name__)
+                self._assistant.last_command = cmd
                 try:
                     cmd.execute(query, self._assistant)
+                    # Feed what just happened into AI context
+                    self._assistant.ai.inject_context(
+                        f"User said: '{query}'. "
+                        f"VEGA handled it with {cmd.__class__.__name__}."
+                    )
                 except Exception as e:
                     logger.error("Command %s failed: %s", cmd.__class__.__name__, e)
                     self._assistant.speech.speak(

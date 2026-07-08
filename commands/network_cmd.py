@@ -56,27 +56,48 @@ class NetworkCommand(BaseCommand):
 
     priority = 12
 
+    def __init__(self):
+        super().__init__()
+        self.last_target = None  # "wifi", "bluetooth", or "hotspot"
+
     @property
     def triggers(self) -> list[str]:
         return [
             # WiFi
-            "wifi on", "wifi off", "turn on wifi", "turn off wifi",
+            "wifi", "wifi on", "wifi off", "turn on wifi", "turn off wifi",
             "enable wifi", "disable wifi", "connect wifi",
             "disconnect wifi", "wi-fi",
             # Bluetooth
-            "bluetooth on", "bluetooth off",
+            "bluetooth", "bluetooth on", "bluetooth off",
             "turn on bluetooth", "turn off bluetooth",
             "enable bluetooth", "disable bluetooth",
             # Hotspot
-            "hotspot on", "hotspot off",
+            "hotspot", "hotspot on", "hotspot off",
             "turn on hotspot", "turn off hotspot",
             "enable hotspot", "disable hotspot",
             "mobile hotspot", "start hotspot", "stop hotspot",
         ]
 
+    def match_followup(self, query: str) -> bool:
+        """Match follow-ups like 'turn it on', 'enable it', 'switch it off'."""
+        followup_words = [
+            "on", "off", "enable", "disable", "turn on", "turn off",
+            "toggle", "switch", "connect", "disconnect",
+        ]
+        return any(word in query for word in followup_words)
+
     def execute(self, query: str, assistant) -> None:
-        # ── WiFi ──
+        # Determine target from query, or fall back to context
         if "wifi" in query or "wi-fi" in query:
+            self.last_target = "wifi"
+        elif "bluetooth" in query:
+            self.last_target = "bluetooth"
+        elif "hotspot" in query:
+            self.last_target = "hotspot"
+
+        target = self.last_target
+
+        if target == "wifi":
             enable = any(w in query for w in ("on", "enable", "turn on", "connect"))
             disable = any(w in query for w in ("off", "disable", "turn off", "disconnect"))
 
@@ -85,12 +106,10 @@ class NetworkCommand(BaseCommand):
             elif enable:
                 self._toggle_wifi(True, assistant)
             else:
-                # Just "wifi" — check status
                 self._wifi_status(assistant)
             return
 
-        # ── Bluetooth ──
-        if "bluetooth" in query:
+        if target == "bluetooth":
             enable = any(w in query for w in ("on", "enable", "turn on"))
             disable = any(w in query for w in ("off", "disable", "turn off"))
 
@@ -104,8 +123,7 @@ class NetworkCommand(BaseCommand):
                 )
             return
 
-        # ── Hotspot ──
-        if "hotspot" in query:
+        if target == "hotspot":
             enable = any(w in query for w in ("on", "enable", "turn on", "start"))
             disable = any(w in query for w in ("off", "disable", "turn off", "stop"))
 
@@ -119,10 +137,18 @@ class NetworkCommand(BaseCommand):
                 )
             return
 
+        # No target set from context — ask the user
+        assistant.speech.speak(
+            "I can control WiFi, Bluetooth, or Hotspot. Which one?"
+        )
+
     # ── WiFi ──────────────────────────────────────────────────────
 
     def _toggle_wifi(self, enable: bool, assistant) -> None:
-        """Toggle WiFi using netsh interface command."""
+        """
+        Toggle WiFi directly via the WinRT Radio API (winsdk).
+        Requires administrator privileges for write access to the radio.
+        """
         if not _is_admin():
             assistant.speech.speak(
                 "WiFi control requires administrator privileges. "
@@ -131,31 +157,60 @@ class NetworkCommand(BaseCommand):
             print("⚠️  Admin required: Right-click → Run as Administrator")
             return
 
-        action = "enabled" if enable else "disabled"
         action_word = "on" if enable else "off"
 
-        # Try common WiFi interface names
-        interface_names = ["Wi-Fi", "WiFi", "Wireless Network Connection"]
+        try:
+            import asyncio
+            from winsdk.windows.devices.radios import Radio, RadioState
 
-        for iface in interface_names:
-            try:
-                result = subprocess.run(
-                    f'netsh interface set interface "{iface}" {action}',
-                    shell=True, capture_output=True, text=True, timeout=10,
+            async def _toggle():
+                radios = await Radio.get_radios_async()
+                for radio in radios:
+                    if radio.kind.name == "WI_FI":
+                        # Check if already in the desired state
+                        is_on = radio.state == RadioState.ON
+                        if is_on == enable:
+                            return "ALREADY"
+
+                        target = RadioState.ON if enable else RadioState.OFF
+                        await radio.set_state_async(target)
+
+                        # Verify the state changed
+                        radios2 = await Radio.get_radios_async()
+                        for r2 in radios2:
+                            if r2.kind.name == "WI_FI":
+                                return "OK" if (r2.state == target) else "FAILED"
+                        return "OK"
+                return "NO_WIFI"
+
+            result = asyncio.run(_toggle())
+
+            if result == "ALREADY":
+                assistant.speech.speak(f"WiFi is already {action_word}.")
+            elif result == "OK":
+                assistant.speech.speak(f"WiFi turned {action_word}.")
+                logger.info("WiFi %s via WinRT Radio API.", action_word)
+                print(f"📶 WiFi: {action_word.upper()}")
+            elif result == "NO_WIFI":
+                assistant.speech.speak(
+                    "I couldn't find a WiFi adapter on this computer."
                 )
-                if result.returncode == 0:
-                    assistant.speech.speak(f"WiFi turned {action_word}.")
-                    logger.info("WiFi %s (interface: %s)", action, iface)
-                    print(f"📶 WiFi: {action_word.upper()}")
-                    return
-            except Exception:
-                continue
+            else:
+                assistant.speech.speak(
+                    "I tried to toggle WiFi but it didn't seem to change."
+                )
 
-        assistant.speech.speak(
-            "I couldn't find the WiFi interface. "
-            "Your WiFi adapter might have a different name."
-        )
-        logger.error("WiFi toggle failed — no matching interface found.")
+        except ImportError:
+            logger.error("winsdk is not installed.")
+            assistant.speech.speak(
+                "WiFi control requires the winsdk package. "
+                "Please run: pip install winsdk"
+            )
+        except Exception as e:
+            logger.error("WiFi toggle error: %s", e)
+            assistant.speech.speak(
+                "I encountered an error trying to toggle WiFi."
+            )
 
     def _wifi_status(self, assistant) -> None:
         """Check current WiFi status."""
@@ -189,125 +244,74 @@ class NetworkCommand(BaseCommand):
 
     def _toggle_bluetooth(self, enable: bool, assistant) -> None:
         """
-        Toggle Bluetooth using multiple approaches for reliability.
-
-        Method 1: PowerShell WinRT Radio API (cleanest)
-        Method 2: Automated Settings UI toggle via pyautogui (fallback)
+        Toggle Bluetooth directly via the WinRT Radio API (winsdk).
+        Requires administrator privileges for write access to the radio.
         """
+        if not _is_admin():
+            assistant.speech.speak(
+                "Bluetooth control requires administrator privileges. "
+                "Please restart VEGA as administrator."
+            )
+            print("⚠️  Admin required: Right-click → Run as Administrator")
+            return
+
         action_word = "on" if enable else "off"
-        assistant.speech.speak(f"Turning bluetooth {action_word}.")
-
-        # ── Method 1: WinRT Radio API ──
-        if self._bt_via_winrt(enable):
-            assistant.speech.speak(f"Bluetooth turned {action_word}.")
-            logger.info("Bluetooth %s via WinRT.", action_word)
-            print(f"🔵 Bluetooth: {action_word.upper()}")
-            return
-
-        logger.warning("WinRT Bluetooth toggle failed, trying Settings UI...")
-
-        # ── Method 2: Automated Settings UI ──
-        if self._bt_via_settings_ui(enable):
-            assistant.speech.speak(f"Bluetooth turned {action_word}.")
-            logger.info("Bluetooth %s via Settings UI.", action_word)
-            print(f"🔵 Bluetooth: {action_word.upper()}")
-            return
-
-        # All methods failed
-        assistant.speech.speak(
-            f"I couldn't turn bluetooth {action_word} automatically. "
-            "Opening the bluetooth settings for you."
-        )
-        try:
-            import os
-            os.startfile("ms-settings:bluetooth")
-        except Exception:
-            pass
-
-    @staticmethod
-    def _bt_via_winrt(enable: bool) -> bool:
-        """Try toggling Bluetooth via PowerShell WinRT Radio API."""
-        state = "On" if enable else "Off"
-
-        ps_script = f"""
-        try {{
-            Add-Type -AssemblyName System.Runtime.WindowsRuntime
-
-            [Windows.Devices.Radios.Radio,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null
-
-            $asyncOp = [Windows.Devices.Radios.Radio]::GetRadiosAsync()
-            $radios = $asyncOp.GetAwaiter().GetResult()
-
-            $btRadio = $radios | Where-Object {{ $_.Kind -eq 'Bluetooth' }}
-
-            if ($btRadio) {{
-                $btRadio.SetStateAsync([Windows.Devices.Radios.RadioState]::{state}).GetAwaiter().GetResult() | Out-Null
-                Write-Output "SUCCESS"
-            }} else {{
-                Write-Output "NO_BT"
-            }}
-        }} catch {{
-            Write-Output "ERROR: $_"
-        }}
-        """
-
-        success, output = _run_powershell(ps_script)
-        if "SUCCESS" in output:
-            return True
-
-        logger.debug("WinRT Bluetooth result: %s", output)
-        return False
-
-    @staticmethod
-    def _bt_via_settings_ui(enable: bool) -> bool:
-        """
-        Toggle Bluetooth by opening Settings and clicking the toggle.
-
-        Uses pyautogui for automated UI interaction.
-        """
-        import os
-        import time
 
         try:
-            import pyautogui
+            import asyncio
+            from winsdk.windows.devices.radios import Radio, RadioState
+
+            async def _toggle():
+                radios = await Radio.get_radios_async()
+                for radio in radios:
+                    if radio.kind.name == "BLUETOOTH":
+                        # Check if already in the desired state
+                        is_on = radio.state == RadioState.ON
+                        if is_on == enable:
+                            return "ALREADY"
+
+                        target = RadioState.ON if enable else RadioState.OFF
+                        await radio.set_state_async(target)
+
+                        # Verify the state changed
+                        radios2 = await Radio.get_radios_async()
+                        for r2 in radios2:
+                            if r2.kind.name == "BLUETOOTH":
+                                return "OK" if (r2.state == target) else "FAILED"
+                        return "OK"
+                return "NO_BT"
+
+            result = asyncio.run(_toggle())
+
+            if result == "ALREADY":
+                assistant.speech.speak(f"Bluetooth is already {action_word}.")
+            elif result == "OK":
+                assistant.speech.speak(f"Bluetooth turned {action_word}.")
+                logger.info("Bluetooth %s via WinRT Radio API.", action_word)
+                print(f"🔵 Bluetooth: {action_word.upper()}")
+            elif result == "NO_BT":
+                assistant.speech.speak(
+                    "I couldn't find a Bluetooth adapter on this computer."
+                )
+            else:
+                assistant.speech.speak(
+                    "I tried to toggle Bluetooth but it didn't seem to change. "
+                    "You may need to toggle it manually from Settings."
+                )
+
         except ImportError:
-            return False
-
-        try:
-            # Open Bluetooth settings
-            os.startfile("ms-settings:bluetooth")
-            time.sleep(2.5)  # Wait for Settings to fully load
-
-            # Bring the Settings window to foreground
-            try:
-                hwnd = ctypes.windll.user32.FindWindowW(
-                    "ApplicationFrameWindow", None
-                )
-                if hwnd:
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
-                    time.sleep(0.5)
-            except Exception:
-                pass
-
-            # The Bluetooth toggle is the first interactive element
-            pyautogui.press("tab")
-            time.sleep(0.3)
-            pyautogui.press("space")
-            time.sleep(1.0)
-
-            # Close ONLY the Settings app (not other windows)
-            try:
-                subprocess.run(
-                    ["taskkill", "/f", "/im", "SystemSettings.exe"],
-                    capture_output=True, timeout=5,
-                )
-            except Exception:
-                pass
-
-            return True
+            logger.error("winsdk is not installed.")
+            assistant.speech.speak(
+                "Bluetooth control requires the winsdk package. "
+                "Please run: pip install winsdk"
+            )
         except Exception as e:
-            logger.debug("Settings UI Bluetooth toggle failed: %s", e)
-            return False
+            logger.error("Bluetooth toggle error: %s", e)
+            assistant.speech.speak(
+                "I encountered an error trying to toggle Bluetooth."
+            )
+
+
 
     # ── Mobile Hotspot ────────────────────────────────────────────
 
