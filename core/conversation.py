@@ -24,7 +24,7 @@ SYSTEM_INSTRUCTION = (
     "the user asks for detail. Be conversational and natural."
 )
 
-# Using gemini-2.5-flash — the proven model from the original vega_ai.py
+# Using gemini-2.5-flash since tests show it is fully working with the provided API key
 MODEL_NAME = "gemini-2.5-flash"
 
 

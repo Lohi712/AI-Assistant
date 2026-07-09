@@ -54,12 +54,57 @@ def _kill_process_by_name(name: str) -> tuple[int, list[str]]:
 
     killed = 0
     killed_names = []
+    
+    # Map spoken names to actual process executable names
+    alias_map = {
+        # Browsers
+        "microsoft edge": "msedge",
+        "edge": "msedge",
+        "google chrome": "chrome",
+        "chrome": "chrome",
+        "brave": "brave",
+        "firefox": "firefox",
+        # Office
+        "word": "winword",
+        "microsoft word": "winword",
+        "powerpoint": "powerpnt",
+        "microsoft powerpoint": "powerpnt",
+        "excel": "excel",
+        "microsoft excel": "excel",
+        # Dev & Utilities
+        "vs code": "code",
+        "visual studio code": "code",
+        "code": "code",
+        "notepad": "notepad",
+        "calculator": "calc",
+        "paint": "mspaint",
+        "snipping tool": "snippingtool",
+        "command prompt": "cmd",
+        "cmd": "cmd",
+        "terminal": "windowsterminal",
+        "windows terminal": "windowsterminal",
+        "powershell": "powershell",
+        # System Apps
+        "file explorer": "explorer",
+        "explorer": "explorer",
+        "files": "explorer",
+        "task manager": "taskmgr",
+        "settings": "systemsettings",
+        "control panel": "control",
+        # Media/Chat
+        "discord": "discord",
+        "spotify": "spotify",
+    }
+    
+    search_name = name.lower()
+    if search_name in alias_map:
+        search_name = alias_map[search_name]
 
     for proc in psutil.process_iter(["pid", "name"]):
         try:
             proc_name = proc.info["name"] or ""
             # Match by partial name (case-insensitive)
-            if name.lower() in proc_name.lower():
+            if search_name in proc_name.lower():
                 proc.kill()
                 killed += 1
                 killed_names.append(proc_name)
@@ -201,17 +246,29 @@ class ProcessCommand(BaseCommand):
 
     def match(self, query: str) -> bool:
         """Custom match to avoid conflicts with other commands."""
-        # "kill" and "close" need context — avoid matching simple phrases
-        if query.strip() in ("kill", "close", "stop"):
+        import re
+        query_clean = query.strip().lower()
+        
+        # "kill" and "stop" need context if they are just single words
+        if query_clean in ("kill", "stop", "close"):
             return False
 
+        # Match "close <app>" but avoid "what time does it close"
+        # Look for "close" at the start, or preceded by conversational filler
+        if re.search(r'^(can you|could you|please|will you|hey vega|vega)?\s*close\s+', query_clean):
+            return True
+
         # Check specific trigger phrases
-        return any(trigger in query for trigger in self.triggers)
+        return any(trigger in query_clean for trigger in self.triggers)
 
     def execute(self, query: str, assistant) -> None:
+        import re
         # ── Kill process ──
-        if any(t in query for t in ("kill", "end task", "force close",
-                                     "close app", "stop process", "terminate")):
+        # Check if the query is a close command or contains kill triggers
+        is_close_cmd = bool(re.search(r'^(can you|could you|please|will you|hey vega|vega)?\s*close\s+', query.strip().lower()))
+        
+        if is_close_cmd or any(t in query for t in ("kill", "end task", "force close",
+                                                    "close app", "stop process", "terminate")):
             self._kill_process(query, assistant)
             return
 
@@ -276,12 +333,19 @@ class ProcessCommand(BaseCommand):
 
     def _kill_process(self, query: str, assistant) -> None:
         """Kill a process by name with confirmation."""
-        # Extract process name from query
+        import re
         process_name = query
+        # Remove conversational filler at the beginning
+        process_name = re.sub(r'^(can you|could you|would you|please|will you|hey vega|vega)\s+', '', process_name, flags=re.IGNORECASE)
+        
         for phrase in ("kill", "end task", "force close", "close app",
-                       "stop process", "terminate", "process", "app"):
-            process_name = process_name.replace(phrase, "")
-        process_name = process_name.strip()
+                       "stop process", "terminate", "process", "app", "close"):
+            # Use regex to remove these phrases only as whole words to avoid matching substrings
+            process_name = re.sub(rf'\b{phrase}\b', '', process_name, flags=re.IGNORECASE)
+            
+        # Remove articles and extra spaces
+        process_name = re.sub(r'\b(the|a|an)\b', '', process_name, flags=re.IGNORECASE)
+        process_name = " ".join(process_name.split())
 
         if not process_name:
             assistant.speech.speak("Which process would you like me to kill?")
